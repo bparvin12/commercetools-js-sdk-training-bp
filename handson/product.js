@@ -1,4 +1,5 @@
 const { getClient, projectKey } = require('./client.js');
+const log = require('../logger.js').log;
 // #region SOLUTION
 const { createRequestBuilder } = require('@commercetools/api-request-builder');
 // #endregion
@@ -16,7 +17,8 @@ const getProductTypes = function getProductTypes() {
 };
 
 const getProductTypeByKey = function getProductTypeByKey(key) {
-  // TODO 4.2: Implement getting a product type by key
+  // TODO 4.C: Implement getting a product type by key
+  // Do use the request builder to build the URI
 
   // #region SOLUTION
   return getClient().execute({
@@ -27,8 +29,9 @@ const getProductTypeByKey = function getProductTypeByKey(key) {
 
 };
 
-const createProduct = function createProduct(name, key, description, productType, sku, priceCentAmount, taxCategory) {
-  // TODO 4.3: Create a product
+const createProduct = function createProduct(name, key, description, productTypeKey, sku, priceCentAmount, taxCategoryKey, brand) {
+  // TODO 4.D: Create a product, understand ResourceIdentifier vs. Reference
+  // https://docs.commercetools.com/http-api-types#resourceidentifier
   // https://docs.commercetools.com/http-api-projects-products.html#create-a-product
 
   // #region SOLUTION
@@ -38,9 +41,7 @@ const createProduct = function createProduct(name, key, description, productType
       "en": name
     },
     productType: {
-      typeId: "product-type",
-      id: productType.id
-      // correct alternative:: "key: productType.key"
+      key: productTypeKey
     },
     slug: {
       "en": name.replace(/[^0-9a-z_-]/gi, '-').substring(0, 256)
@@ -53,7 +54,7 @@ const createProduct = function createProduct(name, key, description, productType
       prices: [{
         value: {
           centAmount: priceCentAmount,
-          currencyCode: "EUR" 
+          currencyCode: "EUR"
         }
       },
       {
@@ -61,11 +62,16 @@ const createProduct = function createProduct(name, key, description, productType
           centAmount: priceCentAmount,
           currencyCode: "USD"
         }
-      }]
+      }],
+      attributes: [
+        {
+          name: "brand",
+          value: brand
+        }
+      ]
     },
-    taxCategory:{
-      typeId: "tax-category",
-      id: taxCategory.id
+    taxCategory: {
+      key: taxCategoryKey
     }
   };
 
@@ -80,6 +86,53 @@ const createProduct = function createProduct(name, key, description, productType
 
 };
 
+const queryProducts = function queryProducts(attributeName, attributeValue) {
+  // TODO 4.E: Implement querying products by given attribute name and value
+  // Assume a Text attribute (not localized)
+  // Use the query builder and log the URI you built for debugging 
+
+  // #region SOLUTION
+  const uriBuilder = createRequestBuilder({ projectKey })
+    .productProjections
+    .where(`variants(attributes(name = "${attributeName}")) and variants(attributes(value = "${attributeValue}"))`)
+    .whereOperator('or')
+    .where(`masterVariant(attributes(name = "${attributeName}")) and masterVariant(attributes(value = "${attributeValue}"))`);
+  const uri = uriBuilder
+    .expand('productType')
+    .build();
+  log(uri);
+
+  return getClient().execute({
+    uri,
+    method: 'GET'
+  })
+  // #endregion
+
+};
+
+const searchProducts = function searchProducts(attributeName, attributeValue, locale, userInput) {
+  // TODO 4.F: Implement searching for products given the user's free text input. 
+  // Optional: Include some facets and try out other search features if you have time. 
+
+  // #region SOLUTION
+  const uri = createRequestBuilder({ projectKey })
+    .productProjectionsSearch
+    .filter(`variants.attributes.${attributeName} : "${attributeValue}"`)
+    .text(userInput, locale)
+    .markMatchingVariants(true)
+    .facet(`variants.attributes.${attributeName}`)
+    .build();
+  log(uri);
+  return getClient().execute({
+    uri,
+    method: 'GET'
+  })
+  // #endregion
+
+};
+
 module.exports.getProductTypes = getProductTypes;
 module.exports.getProductTypeByKey = getProductTypeByKey;
 module.exports.createProduct = createProduct;
+module.exports.queryProducts = queryProducts;
+module.exports.searchProducts = searchProducts;
